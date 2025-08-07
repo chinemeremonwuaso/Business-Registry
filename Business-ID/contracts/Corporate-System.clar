@@ -80,6 +80,11 @@
       (is-eq status "RETIRED"))
 )
 
+;; Validates principal address (checks if it's a valid standard principal)
+(define-private (is-valid-principal (address principal))
+  (is-standard address)
+)
+
 ;; Checks if caller has admin privileges
 (define-private (is-admin)
   (let ((admin-record (map-get? admins { admin: tx-sender })))
@@ -176,6 +181,8 @@
 (define-public (transfer-ownership (new-owner principal))
   (begin
     (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED-ACCESS)
+    (asserts! (is-valid-principal new-owner) ERR-INVALID-ADDRESS)
+    (asserts! (not (is-eq new-owner tx-sender)) ERR-SAME-OWNER)
     (ok (var-set contract-owner new-owner))
   )
 )
@@ -184,7 +191,9 @@
 (define-public (add-admin (admin-address principal) (admin-role (string-ascii 10)))
   (begin
     (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED-ACCESS)
+    (asserts! (is-valid-principal admin-address) ERR-INVALID-ADDRESS)
     (asserts! (or (is-eq admin-role "SUPER") (is-eq admin-role "BASIC")) ERR-INVALID-ADMIN)
+    (asserts! (not (is-eq admin-address tx-sender)) ERR-SAME-OWNER)
     (ok (map-set admins 
       { admin: admin-address } 
       { authorized: true, role: admin-role }))
@@ -195,6 +204,8 @@
 (define-public (remove-admin (admin-address principal))
   (begin
     (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED-ACCESS)
+    (asserts! (is-valid-principal admin-address) ERR-INVALID-ADDRESS)
+    (asserts! (not (is-eq admin-address tx-sender)) ERR-SAME-OWNER)
     (ok (map-set admins 
       { admin: admin-address } 
       { authorized: false, role: "NONE" }))
@@ -211,6 +222,7 @@
   (begin
     (asserts! (is-admin) ERR-NOT-ADMIN)
     (asserts! (is-valid-lei lei) ERR-INVALID-LEI-FORMAT)
+    (asserts! (is-valid-principal lei-owner) ERR-INVALID-ADDRESS)
     (asserts! (> expiration-height block-height) ERR-INVALID-EXPIRATION)
     (asserts! (is-none (map-get? lei-registry { lei: lei })) ERR-LEI-EXISTS)
     
@@ -248,6 +260,7 @@
 (define-public (transfer-lei (lei (string-ascii 20)) (new-owner principal))
   (begin
     (asserts! (is-valid-lei lei) ERR-INVALID-LEI-FORMAT)
+    (asserts! (is-valid-principal new-owner) ERR-INVALID-ADDRESS)
     (asserts! (can-modify-lei lei) ERR-NOT-OWNER)
     
     (let ((lei-record (unwrap! (map-get? lei-registry { lei: lei }) ERR-LEI-NOT-FOUND)))
